@@ -1009,56 +1009,31 @@ void UpdateSortedVisibleObjects()
 
 				object->m_distanceFromCamera = Vector3DistanceSqr(object->m_centerPoint, g_camera.position);
 				g_sortedVisibleObjects.push_back(object);
-				int maxFrames = 1;
-				bool frameSwitch = false;
+
+				// Random-trigger frame anims (bubbles, lightning): play a burst via Activate.
+				// Continuous anims (flags) are advanced in InteractiveDraw via SetFrame.
+				int maxFrames = g_shapeTable[object->m_ObjectType][0].m_numFrames;
 				bool randomlyActive = false;
 				switch (object->m_ObjectType)
 				{
 					case 179:
-						// 179 is something ethereal, has 0-7 frames
-						maxFrames = 8;
-						frameSwitch = false;
-						randomlyActive = true;
-						break;
 					case 334:
-						// 334 is green swamp bubbles, has 0-7 frames
-						maxFrames = 8;
-						frameSwitch = false;
-						randomlyActive = true;
-						break;
 					case 335:
-						// 335 is green swamp bubbles, has 0-7 frames
-						maxFrames = 8;
-						frameSwitch = false;
-						randomlyActive = true;
-						break;
 					case 780:
-						// 700 is blue bubbles, has 0-7 frames
-						maxFrames = 8;
-						frameSwitch = false;
 						randomlyActive = true;
+						if (maxFrames < 2) maxFrames = 8;
 						break;
-					//case 1022:
-					//	// 1022 is something, has 0-11 frames
-					//	maxFrames = 11;
-					//	frameSwitch = true;
-					//	randomlyActive = false;
-					//	break;
 					case 384:
 					case 985:
 					case 1008:
 					case 1009:
-						maxFrames = 17;
-						frameSwitch = false;
 						randomlyActive = true;
+						if (maxFrames < 2) maxFrames = 17;
 						break;
 					default:
-						maxFrames = 1;
-						frameSwitch = false;
-						randomlyActive = false;
 						break;
 				}
-				if (randomlyActive == true)
+				if (randomlyActive && maxFrames > 1)
 				{
 					int probability = 5;
 					object->Activate(float(GetTime()), maxFrames, probability);
@@ -1245,22 +1220,44 @@ void MorphObject(int shapenum, int framenum, float x, float y, float z, float nu
 	//AddConsoleString("Morphed " + std::to_string(hideCount) + " objects in the Trinsic area.", GREEN);
 }
 
-void MorphAnimFlat(int shapeNum, int frameNum, int numFrames) {
-	ShapeData& m_shapeData = g_shapeTable[shapeNum][frameNum];
-
-	// Palette-cycled shapes use the runtime LUT; do not replace with UV frame strips.
-	if (!m_shapeData.m_palettePixels.empty() || m_shapeData.HasPaletteAnimation())
+void MorphAnimFlat(int shapeNum, int startFrame, int numFrames) {
+	// Mark a native multi-frame animation on the shape table. Objects cycle
+	// g_shapeTable[shape][startFrame .. startFrame+numFrames) via SetFrame —
+	// no baked shapesprite strip required.
+	if (shapeNum < 0 || shapeNum >= 1024 || numFrames < 2)
+	{
+		return;
+	}
+	if (startFrame < 0 || startFrame + numFrames > 32)
 	{
 		return;
 	}
 
-	std::string imagePath = "Images/shapesprite/shapesprite_" + std::to_string(shapeNum) + "_" + std::to_string(frameNum) + ".png";
-	if (FileExists(imagePath.c_str())) {
-		m_shapeData.m_drawType = ShapeDrawType::OBJECT_DRAW_ANIMFLAT;
-		m_shapeData.m_numFrames = numFrames;
-		Image image = LoadImage(imagePath.c_str());
-		m_shapeData.SetDefaultTexture(image);
+	int validCount = 0;
+	for (int i = 0; i < numFrames; ++i)
+	{
+		ShapeData& sd = g_shapeTable[shapeNum][startFrame + i];
+		if (!sd.IsValid())
+		{
+			continue;
+		}
+		++validCount;
+		// Legacy shapetable stored ANIMFLAT on frame 0 for strip playback; use FLAT.
+		if (sd.GetDrawType() == ShapeDrawType::OBJECT_DRAW_ANIMFLAT)
+		{
+			sd.SetDrawType(ShapeDrawType::OBJECT_DRAW_FLAT);
+			sd.SetupDrawTypes();
+		}
 	}
+
+	if (validCount < 2)
+	{
+		return;
+	}
+
+	// Animation length lives on the base frame; draw code always reads shape[startFrame].
+	ShapeData& base = g_shapeTable[shapeNum][startFrame];
+	base.m_numFrames = numFrames;
 }
 
 void MorphRoof(int roofId, int shapeNum, int frameNum, float x, float y, float z, float nux, float nuy, float nuz)
@@ -1294,68 +1291,6 @@ void MorphRoof(int roofId, int shapeNum, int frameNum, float x, float y, float z
 		}
 	}
 	//AddConsoleString("Morphed " + std::to_string(hideCount) + " roof objects in the area.", GREEN);
-}
-
-void BakeImageShapeFrames(int shapeNum, int startFrame, int maxFrames, int tileSizeX, int tileSizeY) {
-	//AddConsoleString("Baking sprite images... ", GREEN);
-	std::string objType = "shapesprite";
-	std::string s_objId = std::to_string(shapeNum);
-	std::string s_objFrame = std::to_string(startFrame);
-	std::string objFolder = "Images/" + objType;
-	std::filesystem::create_directories(objFolder.c_str());
-	std::string imagePath = "Images/" + objType + "/" + objType + "_" + s_objId + "_" + s_objFrame + ".png";
-	int borderSize = 0;
-	int tileCountX = maxFrames - startFrame;
-	int tileCountY = 1;
-	if (FileExists(imagePath.c_str())) {
-		Log("sprite image " + imagePath + " already exists, skipping generation.");
-	}
-	else {
-		Log("sprite image " + imagePath + " does not exist, generating.");
-		int imgSzeX = (tileSizeX * tileCountX);
-		int imgSzeY = (tileSizeY * tileCountY);
-		Image frameImage = GenImageColor(imgSzeX, imgSzeY, Color{ 0, 0, 0, 0 });
-		float x = 0.0f;
-		float z = 0.0f;
-		float thisx = x;
-		float thisz = z;
-		int xInt = int(x);
-		int yInt = int(z);
-		int xPx = 0;
-		int yPx = 0;
-		int j = 0;
-		int i = startFrame;
-		thisz = z + (j * tileSizeY);
-		i = 0;
-		while (i < maxFrames) {
-			thisx = x + ((i-startFrame) * tileSizeX);
-			xInt = int(thisx);
-			yInt = int(thisz);
-			int framenum = i;
-			ShapeData& m_shapeData = g_shapeTable[shapeNum][framenum];
-			//xPx = (i * tileSizeX * borderSize) + borderSize * (tileSizeX + 1);
-			//yPx = (j * tileSizeY * borderSize) + borderSize * (tileSizeY + 1);
-			xPx = (i * tileSizeX) + (tileSizeX);
-			yPx = (j * tileSizeY) + (tileSizeY);
-			//float dstPosX = float(xPx - m_shapeData.m_pixelOffsetX);
-			//float dstPosY = float(yPx - m_shapeData.m_pixelOffsetY);
-			float dstPosX = float(xPx - m_shapeData.m_pixelOffsetX);
-			float dstPosY = float(yPx - m_shapeData.m_pixelOffsetY);
-			//Log("Loading shape palette " + std::to_string(xPx) + ", " + std::to_string(yPx) + " | " + std::to_string(dstPosX) + ", " + std::to_string(dstPosY) + " to sprite image!" + std::to_string(m_shapeData.m_pixelOffsetX) + ", " + std::to_string(m_shapeData.m_pixelOffsetY) + " shapeFrame[" + std::to_string(shapeNum) + ":" + std::to_string(framenum) + "]", "anims.log");
-			ImageDraw(&frameImage,
-				m_shapeData.m_texture->m_OriginalImage,
-				Rectangle{ 0, 0, float(m_shapeData.m_texture->width), float(m_shapeData.m_texture->height) },
-				Rectangle{
-					dstPosX,
-					dstPosY,
-					float(m_shapeData.m_texture->width),
-					float(m_shapeData.m_texture->height) },
-					WHITE);
-			i++;
-		}
-		//Log("Exporting sprite image to " + imagePath, "anims.log");
-		ExportImage(frameImage, imagePath.c_str());
-	}
 }
 
 void BakeImageRoof(int objId, int xOfs, float y, int tileSizeX, int tileSizeY, int borderSize, int tileCountX, int tileCountY) {

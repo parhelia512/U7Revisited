@@ -367,22 +367,11 @@ void ShapeData::SetupDrawTypes()
 	{
 		m_Dims = Vector3{ float(m_texture->width) / 8.0f, float(m_texture->height) / 8.0f, 1 };
 	}
-	else if (m_drawType == ShapeDrawType::OBJECT_DRAW_FLAT)
+	else if (m_drawType == ShapeDrawType::OBJECT_DRAW_FLAT
+		|| m_drawType == ShapeDrawType::OBJECT_DRAW_ANIMFLAT)
 	{
+		// ANIMFLAT is legacy (UV strips); treat like FLAT — multi-frame uses SetFrame.
 		m_Dims = Vector3{ float(m_texture->width) / 8.0f, 0, float(m_texture->height) / 8.0f };
-	}
-	else if (m_drawType == ShapeDrawType::OBJECT_DRAW_ANIMFLAT)
-	{
-		// Palette-animated ANIMFLAT uses a single frame (index map), so size from that texture.
-		// Multi-frame UV strips keep objectData width/depth and only force y flat.
-		if (m_hasPaletteAnim && m_texture != nullptr)
-		{
-			m_Dims = Vector3{ float(m_texture->width) / 8.0f, 0, float(m_texture->height) / 8.0f };
-		}
-		else
-		{
-			m_Dims.y = 0.0f;
-		}
 	}
 	else
 	{
@@ -679,61 +668,8 @@ void ShapeData::Draw(const Vector3& pos, float angle, Color color, Vector3 scali
 	}
 
 	case ShapeDrawType::OBJECT_DRAW_ANIMFLAT:
-	{
-		// Palette-animated shapes use the live palette LUT instead of UV frame strips.
-		if (m_hasPaletteAnim && g_paletteSystemReady)
-		{
-			finalPos = pos;
-			if (pos.y == 0)
-			{
-				finalPos.y = .01f;
-			}
-			else
-			{
-				finalPos.y = pos.y * 1.01f;
-			}
-
-			finalPos = Vector3Add(finalPos, m_TweakPos);
-			finalPos = Vector3Add(finalPos, Vector3{ -m_Dims.x + 1, 0, 1 });
-
-			Vector3 flatScaling = Vector3{ m_Dims.x, 1, m_Dims.z };
-			Material& mat = m_flatModel->GetModel().materials[0];
-			Shader prevShader = mat.shader;
-			Texture prevSpecular = mat.maps[MATERIAL_MAP_SPECULAR].texture;
-			BindPaletteMaterial(&mat, m_indexTexture);
-			m_flatModel->UpdateFlatUV(0.0f, 1.0f, 0.0f, 1.0f);
-			DrawModelEx(m_flatModel->GetModel(), finalPos, { 0, 1, 0 }, 0, flatScaling, color);
-			mat.shader = prevShader;
-			SetMaterialTexture(&mat, MATERIAL_MAP_SPECULAR, prevSpecular);
-			break;
-		}
-
-		finalPos = pos;
-		if (pos.y == 0)
-		{
-			finalPos.y = .01f; //  Otherwise, z-fighting.
-		}
-		else
-		{
-			finalPos.y = pos.y * 1.01f;
-		}
-
-		finalPos = Vector3Add(finalPos, m_TweakPos);
-		finalPos = Vector3Add(finalPos, Vector3{ -m_Dims.x + 1, 0, 1 });
-
-		Vector3 flatScaling = Vector3{ m_Dims.x, 1, m_Dims.z };
-		
-		float timePerFrame = 1.0f / 8.0f;
-		int currentFrame = static_cast<unsigned int>(float(GetTime()) / timePerFrame) % m_numFrames;
-		float uvPerFrame = 1.0f / static_cast<float>(m_numFrames);
-		float frameUV = uvPerFrame * static_cast<float>(currentFrame);
-
-		SetMaterialTexture(&m_flatModel->GetModel().materials[0], MATERIAL_MAP_DIFFUSE, m_texture->m_Texture);
-		m_flatModel->UpdateFlatUV(frameUV, frameUV + uvPerFrame, 0.0f, 1.0f);
-		DrawModelEx(m_flatModel->GetModel(), finalPos, { 0, 1, 0 }, 0, flatScaling, color);
-		break;
-	}
-
+		// Legacy draw type from strip-based anim; fall through as FLAT.
+		// Multi-frame animation is done with U7Object::SetFrame over shape frames.
 	case ShapeDrawType::OBJECT_DRAW_FLAT:
 	{
 		finalPos = pos;

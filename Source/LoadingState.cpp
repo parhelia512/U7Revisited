@@ -706,12 +706,6 @@ void LoadingState::LoadRoofImages(const std::string& filename)
 				{
 					BakeImageRoof(objId, offsetx, float(offsety), tilesizex, tilesizez, bordersize, tilecountx, tilecountz);
 				}
-				else if (objtype == "shapeframes")
-				{
-					//offsetx is frameStart
-					//tilecountx is frameCount
-					BakeImageShapeFrames(objId, offsetx, tilecountx, tilesizex, tilesizez);
-				}
 				else
 				{
 					//DebugPrint("WARNING: Unknown object type in roof images load file at line " + std::to_string(lineNum) + ": " + objtype);
@@ -722,8 +716,7 @@ void LoadingState::LoadRoofImages(const std::string& filename)
 			{
 				if (objtype == "flat")
 				{
-					//offsetx is frameStart
-					//tilecountx is frameCount
+					// offsetx = start frame, tilecountx = frame count — native SetFrame anim
 					MorphAnimFlat(objId, offsetx, tilecountx);
 				}
 				else

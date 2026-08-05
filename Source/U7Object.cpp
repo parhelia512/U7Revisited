@@ -407,86 +407,58 @@ void U7Object::InteractiveDraw()
 	{
 		return; // Not on the screen.
 	}
-	int maxFrames = 1;
-	bool frameSwitch = false;
+	// Native multi-frame anim: MorphAnimFlat stores length on shape frame 0's m_numFrames.
+	// Random-trigger shapes (bubbles, etc.) use Activate from UpdateSortedVisibleObjects.
+	// Continuous shapes (flags/deltas) loop here via SetFrame.
+	const int animFrames = g_shapeTable[m_ObjectType][0].m_numFrames;
 	bool randomlyActive = false;
-
-	// fix me, move to something like g_objectDataTable or g_shapeTable, so we don't have to hardcode this here
 	switch (m_ObjectType)
 	{
-		case 179:
-			// 179 is something ethereal, has 0-7 frames
-			maxFrames = 8;
-			frameSwitch = false;
-			randomlyActive = false;
-			break;
-		case 334:
-			// 334 is green swamp bubbles, has 0-7 frames
-			maxFrames = 8;
-			frameSwitch = false;
-			randomlyActive = false;
-			break;
-		case 335:
-			// 335 is green swamp bubbles, has 0-7 frames
-			maxFrames = 8;
-			frameSwitch = false;
-			randomlyActive = true;
-			break;
-		case 780:
-			// 780 is blue bubbles, has 0-7 frames
-			maxFrames = 8;
-			frameSwitch = false;
-			randomlyActive = false;
-			break;
-		case 256:
-		case 419:
-		case 516:
-		case 610:
-		case 612:
-		case 613:
-		case 632:
-		case 699:
-		case 736:
-		case 737:
-		case 751:
-		case 808:
-		case 834:
-		case 875:
-		case 907:
-		case 911:
-		case 918:
-		case 926:
-		case 927:
-		case 930:
-		case 938:
-		case 1012:
-		case 1020:
-		case 1022:
-			//maxFrames = 11;
-			//frameSwitch = true;
-			//randomlyActive = false;
-			break;
+		case 179:  // lightning
+		case 334:  // bubbles
+		case 335:  // bubbles
+		case 780:  // bubbles
 		case 384:
 		case 985:
 		case 1008:
 		case 1009:
-			maxFrames = 17;
-			frameSwitch = true;
 			randomlyActive = true;
 			break;
 		default:
-			maxFrames = 1;
-			frameSwitch = false;
 			randomlyActive = false;
 			break;
 	}
 
-	if (frameSwitch)
+	if (animFrames > 1 && !randomlyActive)
 	{
-		// Handle frame switching logic here if needed
-		float timePerFrame = 1.0f / 8.0f;
-		int currentFrame = static_cast<unsigned int>(float(GetTime()) / timePerFrame) % maxFrames;
-		SetFrame(currentFrame);
+		const float timePerFrame = 1.0f / 8.0f;
+		int currentFrame = static_cast<unsigned int>(float(GetTime()) / timePerFrame) % animFrames;
+		if (g_shapeTable[m_ObjectType][currentFrame].IsValid())
+		{
+			SetFrame(currentFrame);
+		}
+	}
+	else if (randomlyActive && animFrames <= 1)
+	{
+		// Fallback for shapes that still use the old hardcoded frame counts
+		int maxFrames = 1;
+		switch (m_ObjectType)
+		{
+			case 384: case 985: case 1008: case 1009:
+				maxFrames = 17;
+				break;
+			default:
+				break;
+		}
+		if (maxFrames > 1)
+		{
+			const float timePerFrame = 1.0f / 8.0f;
+			int currentFrame = static_cast<unsigned int>(float(GetTime()) / timePerFrame) % maxFrames;
+			if (g_shapeTable[m_ObjectType][currentFrame].IsValid())
+			{
+				SetFrame(currentFrame);
+			}
+		}
 	}
 
 	Color renderColor = g_Terrain->m_cellLighting[cellx][celly];
@@ -1915,12 +1887,26 @@ void U7Object::SetPos(Vector3 pos)
 
 void U7Object::SetFrame(int frame)
 {
+	if (frame < 0 || frame >= 32)
+	{
+		return;
+	}
+	if (!g_shapeTable[m_ObjectType][frame].IsValid())
+	{
+		return;
+	}
+
 	// Store old frame to check if it actually changed
 	int oldFrame = m_Frame;
 
 	// Update frame and shapeData pointer
 	m_Frame = frame;
 	m_shapeData = &g_shapeTable[m_ObjectType][m_Frame];
+	// Keep object draw type in sync (frame 0 may have been ANIMFLAT in old data)
+	if (!m_isCustomMesh)
+	{
+		m_drawType = m_shapeData->GetDrawType();
+	}
 
 	// Notify pathfinding grid if this is a door (frame change affects walkability)
 	// Doors: frame 0 = closed (not walkable), frame > 0 = open (walkable)

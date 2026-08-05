@@ -384,9 +384,9 @@ void HideObject(int shapenum, int framenum, float x, float y, float z);
 //void MorphObject(int shapenum, int framenum, float x, float y, float z, float nux, float nuy, float nuz, const std::string& modelName);
 void MorphObject(int shapenum, int framenum, float x, float y, float z, float nux, float nuy, float nuz, const std::string& modelName, const std::string& imageName, ShapeDrawType drawType);
 void MorphRoof(int roofId, int shapeNum, int frameNum, float x, float y, float z, float nux, float nuy, float nuz);
-void MorphAnimFlat(int shapeNum, int frameNum, int numFrames);
+// Mark shape frames [startFrame, startFrame+numFrames) as a looping animation (native SetFrame).
+void MorphAnimFlat(int shapeNum, int startFrame, int numFrames);
 void BakeImageRoof(int objId, int xOfs, float y, int tileSizeX, int tileSizeY, int borderSize, int tileCountX, int tileCountY);
-void BakeImageShapeFrames(int shapeNum, int startFrame, int maxFrames, int tileSizeX, int tileSizeY);
 
 void OpenURL(const std::string& url);
 
