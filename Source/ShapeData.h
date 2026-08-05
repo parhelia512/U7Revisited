@@ -88,7 +88,16 @@ public:
 	void SetDefaultTexture(Image image);
 	void SetIndexTexture(Image indexImage);
 	bool HasPaletteAnimation() const { return m_hasPaletteAnim; }
+	// True if any pixel uses U7 xform indices (244-254) — needs alpha blending
+	bool HasXFormPixels() const { return m_hasXFormPixels; }
+	bool NeedsTranslucentDraw() const { return m_hasXFormPixels; }
 	Texture2D* GetIndexTexture() { return m_hasPaletteAnim ? &m_indexTexture : nullptr; }
+
+	// U7 palette indices 244-254 are special translucent ("xform") colors
+	static bool IsXFormPaletteIndex(int paletteIndex)
+	{
+		return paletteIndex >= 244 && paletteIndex < 255;
+	}
 
 	Image GetDefaultTextureImage() { return m_texture->m_Image; }
 	void SetupTextures();
@@ -151,6 +160,8 @@ public:
 	// Palette-index map (R = index, A = opacity) for GPU palette animation
 	Texture2D m_indexTexture = { 0 };
 	bool m_hasPaletteAnim = false;
+	// Any pixel used a U7 xform/translucent palette index (244-254)
+	bool m_hasXFormPixels = false;
 
 	std::vector<coords> m_topFaceMods;
 	std::vector<coords> m_frontFaceMods;

@@ -1355,6 +1355,16 @@ void U7Object::CustomMeshDraw(Color color)
 	Vector3 finalPos = Vector3Add(m_Pos, m_anchorPos);
 	m_customMesh->UpdateAnim("idle");
 
+	// Custom meshes (e.g. stained glass) often carry mid-range alpha in their textures.
+	// Disable depth writes so they blend instead of occluding the world behind them.
+	const bool translucent =
+		(m_objectData && m_objectData->m_isTranslucent) ||
+		(m_shapeData && m_shapeData->NeedsTranslucentDraw());
+	if (translucent)
+	{
+		rlDisableDepthMask();
+	}
+
 	if (m_meshOutline && !g_pixelated)
 	{
 		DrawModelEx(m_customMesh->GetModel(), finalPos, { 0, 1, 0 }, m_rotation, m_Scaling, color);
@@ -1362,6 +1372,11 @@ void U7Object::CustomMeshDraw(Color color)
 	else
 	{
 		DrawModelEx(m_customMesh->GetModel(), finalPos, { 0, 1, 0 }, m_rotation, m_Scaling, color);
+	}
+
+	if (translucent)
+	{
+		rlEnableDepthMask();
 	}
 }
 

@@ -1848,17 +1848,57 @@ void MainState::Draw()
 	if (m_showObjects)
 	{
 		std::vector<U7Object> flats;
+		std::vector<U7Object> translucentFlats;
 		std::vector<U7Object> meshes;
-		//BeginBlendMode(BLEND_ALPHA);
+		std::vector<U7Object> translucentMeshes;
+
+		auto isTranslucentObject = [](U7Object* object) -> bool
+		{
+			if (!object)
+			{
+				return false;
+			}
+			if (object->m_objectData && object->m_objectData->m_isTranslucent)
+			{
+				return true;
+			}
+			if (object->m_shapeData && object->m_shapeData->NeedsTranslucentDraw())
+			{
+				return true;
+			}
+			return false;
+		};
+
 		for (auto object : g_sortedVisibleObjects)
 		{
-			if (object->m_drawType == ShapeDrawType::OBJECT_DRAW_FLAT)
+			const bool translucent = isTranslucentObject(object);
+			if (object->m_drawType == ShapeDrawType::OBJECT_DRAW_FLAT
+				|| object->m_drawType == ShapeDrawType::OBJECT_DRAW_ANIMFLAT)
 			{
-				flats.push_back(*object);
+				if (translucent)
+				{
+					translucentFlats.push_back(*object);
+				}
+				else
+				{
+					flats.push_back(*object);
+				}
 			}
 			else if (object->m_drawType == ShapeDrawType::OBJECT_DRAW_CUSTOM_MESH_DEFER)
 			{
-				meshes.push_back(*object);
+				if (translucent)
+				{
+					translucentMeshes.push_back(*object);
+				}
+				else
+				{
+					meshes.push_back(*object);
+				}
+			}
+			else if (translucent)
+			{
+				// Billboards/cuboids with xform pixels: draw after opaque pass
+				translucentMeshes.push_back(*object);
 			}
 			else
 			{
@@ -1866,53 +1906,41 @@ void MainState::Draw()
 			}
 		}
 
-		//  Flats require disabling the depth mask to draw correctly.
-		//rlDisableDepthMask();
+		// Opaque flats (polygon offset avoids z-fight with terrain)
 		glEnable(GL_POLYGON_OFFSET_FILL);
 		glPolygonOffset(-1.0f, -1.0f);
-		for (auto& object: flats)
+		for (auto& object : flats)
 		{
 			object.Draw();
 		}
 		glDisable(GL_POLYGON_OFFSET_FILL);
-		//rlEnableDepthMask();
-		
-		//  Meshes after every thing else
+
+		// Opaque deferred meshes
 		BeginShaderMode(g_alphaDiscard);
 		for (auto& object : meshes)
 		{
 			object.Draw();
 		}
 		EndShaderMode();
-		
-		//rlDisableDepthMask();
-		/*
-		for (auto object : g_sortedVisibleObjects)
-		{
-			if (object->m_drawType == ShapeDrawType::OBJECT_DRAW_FLAT)
-			{
-				object->Draw();
-			}
-		}
-		rlEnableState(RL_POLYGON_OFFSET_FILL);
-		rlSetPolygonOffset(factor, units);
-		rlDisableState(RL_POLYGON_OFFSET_FILL);
-		//rlEnableDepthMask();
-		*/
-		
 
-		/*
-		for (auto object : g_sortedVisibleObjects)
+		// Translucent pass last so partial-alpha xform colors blend over the scene.
+		// Depth mask is disabled inside ShapeData::Draw for these.
+		glEnable(GL_POLYGON_OFFSET_FILL);
+		glPolygonOffset(-1.0f, -1.0f);
+		BeginBlendMode(BLEND_ALPHA);
+		for (auto& object : translucentFlats)
 		{
-			if (object->m_drawType == ShapeDrawType::OBJECT_DRAW_CUSTOM_MESH)
-			{
-				object->Draw();
-			}
+			object.Draw();
 		}
-		*/
-		meshes.clear();
-		flats.clear();
-		//EndBlendMode();
+		glDisable(GL_POLYGON_OFFSET_FILL);
+
+		BeginShaderMode(g_alphaDiscard);
+		for (auto& object : translucentMeshes)
+		{
+			object.Draw();
+		}
+		EndShaderMode();
+		EndBlendMode();
 	}
 
 	if (g_gumpManager->m_draggingObject && !g_gumpManager->m_isMouseOverGump && g_objectUnderMousePointer != g_Player->GetAvatarObject())

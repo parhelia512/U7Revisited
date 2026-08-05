@@ -1372,7 +1372,11 @@ void LoadingState::CreateShapeTable()
 			thisPalette[j].a = 255;
 		}
 
-		//  Fix for translucent blood
+		// U7 xform/translucent colors (indices 244-254). In the original engine these
+		// palette slots are special: when an object is translucent (or uses these
+		// indices), they blend over the scene. We encode that as true RGBA alpha so
+		// both the RGB texture path and the runtime palette LUT share the same source.
+		// Index 255 is fully transparent.
 		thisPalette[244] = Color{ 144, 40, 192, 128 };
 		thisPalette[245] = Color{ 96, 40, 16, 128 };
 		thisPalette[246] = Color{ 100, 108, 116, 192 };
@@ -1556,7 +1560,8 @@ void LoadingState::CreateShapeTable()
 							unsigned char Value = ReadU8(shapes);
 							ImageDrawPixel(&tempImage, xStart + i, yStart, m_palettes[paletteNumber][Value]);
 							ImageDrawPixel(&indexImage, xStart + i, yStart, Color{ Value, 0, 0, 255 });
-							if (Value >= 224 && Value < 255)
+							// Index map only required for cycling bands (224-243); xform uses baked RGBA
+							if (Value >= 224 && Value < 244)
 							{
 								wrotePaletteIndex = true;
 							}
@@ -1580,7 +1585,7 @@ void LoadingState::CreateShapeTable()
 									unsigned char Value = ReadU8(shapes);
 									ImageDrawPixel(&tempImage, xStart + i, yStart, m_palettes[paletteNumber][Value]);
 									ImageDrawPixel(&indexImage, xStart + i, yStart, Color{ Value, 0, 0, 255 });
-									if (Value >= 224 && Value < 255)
+									if (Value >= 224 && Value < 244)
 									{
 										wrotePaletteIndex = true;
 									}
@@ -1594,7 +1599,7 @@ void LoadingState::CreateShapeTable()
 								{
 									ImageDrawPixel(&tempImage, xStart + i, yStart, m_palettes[paletteNumber][Value]);
 									ImageDrawPixel(&indexImage, xStart + i, yStart, Color{ Value, 0, 0, 255 });
-									if (Value >= 224 && Value < 255)
+									if (Value >= 224 && Value < 244)
 									{
 										wrotePaletteIndex = true;
 									}

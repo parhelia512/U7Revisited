@@ -215,16 +215,12 @@ void UpdateRuntimePalette()
 	const int step = static_cast<int>(GetTime() * 8.0) % 8;
 
 	g_runtimePalette = g_basePalette;
+	// Water / sparkle cycling only. Indices 244-254 are U7 xform (translucent)
+	// colors — fixed tint + alpha, not animated (animating them turns blood into
+	// a yellow/green/blue/red strobe).
 	RotatePaletteBand(224, 8, step);
 	RotatePaletteBand(232, 8, step);
 	RotatePaletteBand(240, 4, step);
-	RotatePaletteBand(244, 4, step);
-	RotatePaletteBand(248, 4, step);
-	RotatePaletteBand(252, 3, step);
-
-	// Preserve special translucent overrides baked into base palette for 244-255
-	// (blood etc.) — re-apply alpha from base after rotation for those that use it.
-	// Rotation already pulled from g_basePalette which has the translucent colors.
 
 	UpdateTexture(g_paletteTexture, g_runtimePalette.data());
 

@@ -124,10 +124,15 @@ void ShapeData::SetPixelOffset(int offsetX, int offsetY)
 
 void ShapeData::CaptureSpecialPaletteReferences(int posX, int posY, int paletteRef)
 {
-	// U7 cycling bands: 224-231, 232-239 (8), 240-251 (4), 252-254 (3)
-	if (paletteRef >= 224 && paletteRef < 255)
+	// Cycling bands only (water/sparkle). Used for index maps + terrain/cuboid recolor.
+	if (paletteRef >= 224 && paletteRef < 244)
 	{
 		m_palettePixels.push_back({ posX, posY, paletteRef });
+	}
+	// U7 xform indices (244-254): translucent tints, not palette-cycled.
+	if (IsXFormPaletteIndex(paletteRef))
+	{
+		m_hasXFormPixels = true;
 	}
 }
 
@@ -649,6 +654,14 @@ void ShapeData::Draw(const Vector3& pos, float angle, Color color, Vector3 scali
 
 	Vector3 finalPos = Vector3Add(pos, m_TweakPos);
 
+	// Xform/translucent pixels must blend with the scene behind them.
+	// Depth-write would leave an opaque hole in the Z buffer.
+	const bool translucentPass = NeedsTranslucentDraw() || (objectData && objectData->m_isTranslucent);
+	if (translucentPass)
+	{
+		rlDisableDepthMask();
+	}
+
 	switch (m_drawType)
 	{
 	case ShapeDrawType::OBJECT_DRAW_CUBOID:
@@ -854,6 +867,11 @@ void ShapeData::Draw(const Vector3& pos, float angle, Color color, Vector3 scali
 	{
 		break;
 	}
+	}
+
+	if (translucentPass)
+	{
+		rlEnableDepthMask();
 	}
 }
 
