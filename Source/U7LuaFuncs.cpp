@@ -1183,7 +1183,10 @@ static int LuaNPCIDInParty(lua_State *L)
 {
     if (g_LuaDebug) NPCDebugPrint("LUA: npc_id_in_party called");
     int npc_id = luaL_checkinteger(L, 1);
-    bool in_party = g_Player->NPCIDInParty(npc_id);
+    // Decompiled BG scripts often pass negative NPC ids (Exult-style).
+    if (npc_id < 0 && npc_id > -256)
+        npc_id = -npc_id;
+    bool in_party = g_Player && g_Player->NPCIDInParty(npc_id);
     lua_pushboolean(L, in_party);
     return 1;
 }

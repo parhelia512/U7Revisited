@@ -797,6 +797,9 @@ void U7Object::MonsterInit()
 	m_attackCooldown = 3.0f;
 	m_cooldownTimer = 0.0;
 	m_name = g_objectDataTable[m_shapeData->m_shape].m_name;
+
+	// Same as NPCInit: refresh pick box now that UnitType is MONSTER.
+	SetPos(m_Pos);
 }
 
 void U7Object::HandleVoiceEgg()
@@ -2445,7 +2448,22 @@ void U7Object::SetPos(Vector3 pos)
 
 	ObjectData* objectData = &g_objectDataTable[m_shapeData->GetShape()];
 
-	if (m_drawType == ShapeDrawType::OBJECT_DRAW_BILLBOARD)
+	// NPCs/monsters are stored at tile centers (draw matches m_Pos). Their pick box
+	// must still use the tile's upper-left as min — otherwise the clickable volume
+	// sits SE of the visible sprite and feels "off."
+	const bool characterAtTileCenter =
+		(m_UnitType == UnitTypes::UNIT_TYPE_NPC || m_UnitType == UnitTypes::UNIT_TYPE_MONSTER);
+
+	if (characterAtTileCenter)
+	{
+		dims = Vector3{ objectData->m_width, objectData->m_height, objectData->m_depth };
+		if (dims.x < 0.5f) dims.x = 1.0f;
+		if (dims.y < 0.5f) dims.y = 1.0f;
+		if (dims.z < 0.5f) dims.z = 1.0f;
+		// Tile UL is one unit NW of the center tile's SE-style indexing used elsewhere.
+		boundingBoxAnchorPoint = Vector3{ floorf(m_Pos.x), m_Pos.y, floorf(m_Pos.z) };
+	}
+	else if (m_drawType == ShapeDrawType::OBJECT_DRAW_BILLBOARD)
 	{
 		dims = Vector3{ objectData->m_width, objectData->m_height, objectData->m_depth };
 		boundingBoxAnchorPoint = Vector3Add(m_Pos, Vector3{ 0, 0, 0 });
@@ -2471,7 +2489,15 @@ void U7Object::SetPos(Vector3 pos)
 
 	m_boundingBox = { boundingBoxAnchorPoint, Vector3Add(boundingBoxAnchorPoint, dims) };
 
-	m_centerPoint = Vector3Subtract(pos, {dims.x / 2, dims.y / 2, dims.z / 2});
+	if (characterAtTileCenter)
+	{
+		// Keep sort/lighting center on the visible character (tile center).
+		m_centerPoint = Vector3{ m_Pos.x, m_Pos.y + dims.y * 0.5f, m_Pos.z };
+	}
+	else
+	{
+		m_centerPoint = Vector3Subtract(pos, {dims.x / 2, dims.y / 2, dims.z / 2});
+	}
 	//m_centerPoint = Vector3Add(m_centerPoint, m_shapeData->m_TweakPos);
 	m_terrainCenterPoint = m_centerPoint;
 	m_terrainCenterPoint.y = m_Pos.y;
@@ -3749,6 +3775,9 @@ void U7Object::NPCInit(NPCData* npcData)
 			// loop until swapped or cur updated
 		}
 	}
+
+	// AddObject/SetPos ran before UnitType was NPC, so rebuild the tile-center pick box now.
+	SetPos(m_Pos);
 }
 
 // ============================================================================
